@@ -1,0 +1,431 @@
+/**
+ *
+ * @licstart  The following is the entire license notice for the 
+ *  JavaScript code in this page.
+ *
+ * Copyright (C) 2019  RmbRT
+ *
+ *
+ * The JavaScript code in this page is free software: you can
+ * redistribute it and/or modify it under the terms of the GNU
+ * General Public License (GNU GPL) as published by the Free Software
+ * Foundation, either version 3 of the License, or (at your option)
+ * any later version.  The code is distributed WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+ *
+ * As additional permission under GNU GPL version 3 section 7, you
+ * may distribute non-source (e.g., minimized or compacted) forms of
+ * that code without the copy of the GNU GPL normally required by
+ * section 4, provided you include this license notice and a URL
+ * through which recipients can access the Corresponding Source.
+ *
+ * @licend  The above is the entire license notice
+ * for the JavaScript code in this page.
+ *
+ */
+'use strict';
+
+console.info("This site is using renderable.js, which is free software; you can view its license and original source code at https://github.com/RmbRT/renderable.js");
+
+const Renderable =
+{
+	/** Detect whether an object is a renderable object.
+	@param obj:
+		The object to check.
+	@return
+		Whether the object was made renderable using Renderable.enable. */
+	isRenderable(obj)
+	{
+		return obj && ("_renderable" in obj);
+	},
+
+	/** Assert that an object is a renderable object.
+	@param renderable:
+		The object to assert as renderable.
+	@throws Error
+		If `renderable` is not a renderable object. */
+	assertRenderable(renderable)
+	{
+		if(!Renderable.isRenderable(renderable))
+			throw new Error("Non-renderable object passed.");
+	},
+
+	/** Adds renderable properties to a renderable object.
+		When a renderable property is changed, the associated renderable object is re-rendered.
+	@param obj:
+		The renderable object.
+	@param fields:
+		An object containing the properties to be added, as well as their initial values. */
+	addFields(obj, fields)
+	{
+		Renderable.assertRenderable(obj);
+
+		for(name in fields)
+		{
+			if(!(name in obj))
+			{
+				obj._renderable.values[name] = fields[name];
+				Object.defineProperty(obj, name, {
+					get: ((name) => { return function(){ return this._renderable.values[name]; }; })(name),
+					set: ((name) => { return function(value)
+						{
+							if(this._renderable.values[name] !== value)
+							{
+								this._renderable.values[name] = value;
+								Renderable.invalidate(this);
+							}
+						}; })(name)
+				});
+			}
+		}
+
+		return obj;
+	},
+
+	/** Makes an object renderable.
+	@param obj:
+		The object to make renderable.
+	@param params:
+		An object containing parameters:
+
+		* render:
+			A function that generates a HTML representation of the object.
+		* anchor:
+			Optional: The anchor(s) in the document to render the object into.
+			Either an Element, an Element array, or a string. If it is a string, renders into all elements with the name "render.x", where x is the anchor string, and saves the object into the global render.x (again, where x is the anchor string).
+		* children:
+			Optional: The renderable objects this object uses internally.
+			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects. */
+	enable(obj, params)
+	{
+		if(Renderable.isRenderable(obj))
+			throw new Error("Object must not yet be renderable.");
+
+		if(!(params.render instanceof Function))
+			throw new Error("Expected 'render' function in params.");
+
+		if("render" in obj)
+			throw new Error("Object must not yet have a 'render' function.");
+		obj.toString = obj.render = Renderable._internal.public_render;
+
+		if("anchor" in params)
+		{
+			if(params.anchor instanceof Element)
+				params.anchor = [params.anchor];
+			else if(typeof params.anchor === 'string')
+			{
+				if(params.anchor in render)
+					throw new Error("Duplicate renderable detected!");
+				
+				render[params.anchor] = obj;
+			}
+		}
+
+		obj._renderable =
+		{
+			values: {},
+			locked: 0,
+			dirty: true,
+			anchor: params.anchor || [],
+			children: [],
+			parents: [],
+			render: params.render,
+			cache: null,
+			rendering: false
+		};
+
+		if("children" in params)
+		{
+			if(Renderable.isRenderable(params.children))
+			{
+				obj._renderable.children = [params.children];
+				params.children._renderable.parents.push(obj);
+			} else if(params.children instanceof Array)
+			{
+				for(let child of params.children)
+				{
+					Renderable.assertRenderable(child);
+					obj._renderable.children.push(child);
+					child._renderable.parents.push(obj);
+				}
+			} else
+			{
+				throw new Error("Children must be renderable or renderable array!");
+			}
+		}
+
+		return obj;
+	},
+
+	/** Creates a new renderable object.
+	@param fields:
+		An object containing the properties to generate for the renderable object and their initial values.
+	@param params:
+		An object containing parameters:
+
+		* render:
+			A function that generates a HTML representation of the object.
+		* anchor:
+			Optional: The anchor(s) in the document to render the object into.
+			Either an Element, an Element array, or a string. If it is a string, renders into all elements with the name "render.x", where x is the anchor string, and saves the object into the global render.x (again, where x is the anchor string).
+		* children:
+			Optional: The renderable objects this object uses internally.
+			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects. */
+	create(fields, params)
+	{
+		var r = Renderable.addFields(
+			Renderable.enable(
+				{ },
+				params),
+			fields);
+		Renderable.render(r);
+		return r;
+	},
+
+	/** Renders the renderable object into all its anchors.
+		Only modifies differing elements in the document, to minimise the amount of re-rendering done by the browser.
+	@param renderable:
+		The renderable object to render.
+	@return
+		Whether any modifications to the document resulted from rendering the object.
+		Also returns true if the element has no anchors. */
+	render(renderable)
+	{
+		Renderable.assertRenderable(renderable);
+
+		if(Renderable.isLocked(renderable) || !renderable._renderable.dirty)
+			return false;
+
+
+		var anchor = renderable._renderable.anchor;
+		if(typeof anchor === 'string')
+			anchor = document.getElementsByName("render."+anchor);
+
+		// If the renderable is in the document, render it.
+		if(anchor.length)
+		{
+			var out = {};
+			let html = renderable.render(out);
+
+			if(!out.changed)
+				return false;
+
+			var parsed = document.createElement("span");
+			parsed.innerHTML = html;
+			var copy = anchor.length > 1;
+
+			var changed = false;
+			for(let a of anchor)
+				if(parsed.innerHTML !== a.innerHTML)
+				{
+					if(Renderable._internal.render(parsed, a, copy))
+						changed = true;
+				}
+			return changed;
+		} else return true;
+	},
+
+	/** Checks whether a renderable object is currently locked.
+	@param renderable:
+		The renderable object to check.
+	@return
+		Whether `renderable` is locked. */
+	isLocked(renderable)
+	{
+		Renderable.assertRenderable(renderable);
+		return renderable._renderable.locked;
+	},
+
+	/** Locks a renderable object, so modifications will not trigger a re-render until it is unlocked again.
+		Objects can be locked multiple times simultaneously.
+	@param renderable:
+		The renderable object to lock. */
+	lock(renderable)
+	{
+		Renderable.assertRenderable(renderable);
+
+		if(Renderable.isLocked(renderable))
+			throw new Error("Tried to lock locked renderable.");
+
+		++renderable._renderable.locked;
+	},
+
+	/** Unlocks a renderable object.
+		This removes only one lock. If there are multiple locks on the same renderable object, it has to be unlocked multiple times. When unlock removes the last lock of a renderable object, all changes made to it while it was locked are rendered.
+	@param renderable:
+		The renderable object to unlock. Must be currently locked. */
+	unlock(renderable)
+	{
+		Renderable.assertRenderable(renderable);
+		if(Renderable.isLocked(renderable))
+		{
+			if(!--renderable._renderable.locked)
+				Renderable.render(renderable);
+		}
+	},
+
+	/** Invalidates a renderable object, and triggers a re-render.
+		Calls Renderable.render, and if it returns true, then all parents are invalidated as well. This function is called automatically whenever a renderable property is changed. If a renderable object has unregistered properties, this function has to be called manually after each modification.
+	@param renderable:
+		The renderable object to invalidate. */
+	invalidate(renderable)
+	{
+		Renderable.assertRenderable(renderable);
+		renderable._renderable.dirty = true;
+		if(Renderable.render(renderable))
+			for(parent of renderable._renderable.parents)
+				Renderable.invalidate(parent);
+	},
+
+	_internal:
+	{
+		render(update, anchor, clone)
+		{
+			var changed = false;
+			var cu = update.firstChild;
+			var ca = anchor.firstChild;
+
+			while(cu && ca)
+			{
+				var nu = cu.nextSibling;
+				var na = ca.nextSibling;
+
+				if(ca.nodeType !== cu.nodeType
+				|| ca.nodeValue !== cu.nodeValue)
+				{
+					anchor.replaceChild(clone ? cu.cloneNode(true) : cu, ca);
+					changed = true;
+				} else
+				{
+					if(ca.outerHTML !== cu.outerHTML)
+						if(Renderable._internal.render(cu, ca, clone))
+							changed = true;
+				}
+
+				ca = na;
+				cu = nu;
+			}
+
+			while(cu)
+			{
+				var nu = cu.nextSibling;
+				anchor.appendChild(clone ? cu.cloneNode(true) : cu);
+				changed = true;
+				cu = nu;
+			}
+
+			while(ca)
+			{
+				var na = ca.nextSibling;
+				anchor.removeChild(ca);
+				changed = true;
+				ca = na;
+			}
+
+			return changed;
+		},
+
+		public_render(obj)
+		{
+			if(this._renderable.rendering)
+				throw new Error("Fractal rendering occurred!");
+			if(this._renderable.dirty)
+			{
+				this._renderable.rendering = true;
+				let new_html = `<span>${this._renderable.render.apply(this).replace(/\$\{render\.(.+?)\}/g, "${{render.$1}}")}</span>`;
+				if(obj)
+				{
+					obj.changed = (this._renderable.cache !== new_html);
+				}
+				this._renderable.cache = new_html;
+				this._renderable.dirty = false;
+				this._renderable.rendering = false;
+			}
+			return this._renderable.cache;
+		},
+
+		replace_placeholders(node)
+		{
+			if(node.nodeType == Node.TEXT_NODE)
+			{
+				const regex = /\$\{render\.(.+?)\}/g;
+				var match;
+				while((match = regex.exec(node.nodeValue)) !== null)
+				{
+					let name = match[1];
+					var anchor = document.createElement("A");
+					anchor.name="render." + match[1];
+					if(name in render)
+					{
+						anchor.innerHTML = render[name].render();
+						if(render[name]._renderable.anchor instanceof Array)
+							render[name]._renderable.anchor.push(anchor);
+					} else
+					{
+						anchor.innerHTML = `\${{render.${name}}}`;
+					}
+
+					// put the rest of the text into a new text node.
+					var newTextNode = document.createTextNode(node.textContent.substring(match.index+match[0].length));
+					// insert the left part of the text into the old text node.
+					node.textContent = node.textContent.substr(0, match.index);
+					// insert newTextNode after node into the parent node.
+					if(node.nextSibling !== null) {
+						node.parentNode.insertBefore(newTextNode, node.nextSibling);
+					} else {
+						node.parentNode.appendChild(newTextNode);
+					}
+					// insert the link between the left and right part.
+					node.parentNode.insertBefore(anchor, node.nextSibling);
+					// continue replacing the rest of the text node.
+					node = newTextNode;
+				}
+			} else if(node.nodeType == Node.ELEMENT_NODE)
+			{
+				for(var c of node.childNodes)
+					Renderable._internal.replace_placeholders(c);
+			}
+		},
+
+		register_mutation_observer()
+		{
+			var observer = new MutationObserver(function(notifications, observer)
+			{
+				for(let notification of notifications)
+				{
+					switch(notification.type)
+					{
+					case 'childList':
+						{
+							for(let added of notification.addedNodes)
+								Renderable._internal.replace_placeholders(added);
+						} break;
+					case 'characterData':
+						{
+							Renderable._internal.replace_placeholders(notification.target);
+						} break;
+					default:
+					}
+				}
+			});
+
+			observer.state = {
+				attributes: false,
+				characterDataOldValue: false,
+				characterData: true,
+				childList: true,
+				subtree: true
+			};
+
+			observer.observe(document.body, observer.state);
+		}
+	}
+};
+
+window.render = {};
+
+document.addEventListener("DOMContentLoaded", function() {
+	Renderable._internal.replace_placeholders(document.body);
+	Renderable._internal.register_mutation_observer();
+});
