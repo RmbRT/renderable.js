@@ -341,7 +341,8 @@ const Renderable =
 			if(this._renderable.dirty)
 			{
 				this._renderable.rendering = true;
-				let new_html = this._renderable.render.apply(this).replace(/\$\{render\.(.+?)\}/g, "${{render.$1}}");
+				// Ignore render placeholders within the output.
+				let new_html = this._renderable.render.apply(this);
 				if(obj)
 				{
 					obj.changed = (this._renderable.cache !== new_html);
@@ -356,13 +357,16 @@ const Renderable =
 		/** Replaces anchor placeholders (${render.anchor} strings) with anchor tags in a node. */
 		replace_placeholders(node)
 		{
+			if(Renderable._internal.ignore(node))
+				return;
+
 			switch(node.nodeType)
 			{
 			case Node.TEXT_NODE:
 				{
 					const regex = /\$\{render\.(.+?)\}/g;
 					var match;
-					while((match = regex.exec(node.nodeValue)) !== null)
+					if((match = regex.exec(node.nodeValue)) !== null)
 					{
 						let name = match[1];
 						var anchor = document.createElement("A");
@@ -374,7 +378,7 @@ const Renderable =
 								render[name]._renderable.anchor.push(anchor);
 						} else
 						{
-							anchor.innerHTML = `\${{render.${name}}}`;
+							anchor.innerHTML = `\${render.${name}}`;
 						}
 
 						// put the rest of the text into a new text node.
@@ -387,18 +391,45 @@ const Renderable =
 						} else {
 							node.parentNode.appendChild(newTextNode);
 						}
-						// insert the link between the left and right part.
+						// insert the anchor between the left and right part.
 						node.parentNode.insertBefore(anchor, node.nextSibling);
-						// continue replacing the rest of the text node.
-						node = newTextNode;
 					}
 				} break;
 			case Node.ELEMENT_NODE:
 				{
 					for(var c of node.childNodes)
+					{
 						Renderable._internal.replace_placeholders(c);
+					}
 				} break;
 			}
+		},
+
+		forbidden_tags: {
+			"SCRIPT":"",
+			"STYLE":"",
+			"CODE":"",
+			"X-RENDERABLEJS-IGNORE": ""
+		},
+
+		ignore(node)
+		{
+			if(!node)
+				return false;
+
+			if(node.nodeType === Node.ELEMENT_NODE)
+			{
+				if((node.tagName in Renderable._internal.forbidden_tags)
+				|| node.hasAttribute("data-renderablejs-ignore"))
+				{
+					if((node.getAttribute("data-renderablejs-ignore")||"") !== "no")
+						return true;
+				}
+				if((node.name || "").match(/render\..+/))
+					return true;
+			}
+
+			return Renderable._internal.ignore(node.parentElement);
 		},
 
 		/** Registers the DOM mutation observer that automatically detects anchor placeholders in new nodes. */
@@ -413,7 +444,9 @@ const Renderable =
 					case 'childList':
 						{
 							for(let added of notification.addedNodes)
+							{
 								Renderable._internal.replace_placeholders(added);
+							}
 						} break;
 					case 'characterData':
 						{

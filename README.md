@@ -94,6 +94,13 @@ This only redraws the time if the string returned by `render()` differs from the
 Even if you insert HTML dynamically into the site, then `${}` anchors are properly recognised and replaced.
 This makes the framework very flexible in its usage, and compatible with more sophisticated libraries that modify the DOM.
 
+**Turning on/off substitution**&emsp;
+Substitution is automatically disabled in `code`, `script`, `style`, and the custom `x-renderablejs-ignore` tags and their descendants.
+It is also possible to turn on substitution in a disabled tag by adding the `data-renderablejs-ignore=no` attribute.
+If it is present, but not set to `no`, it also suppresses substitution.
+Note that you cannot turn on substitution inside a tag whose parent tag has disabled substitution.
+Also note that if a substitution results in a placeholder being generated, it is automatically wrapped in an `x-renderablejs-ignore` tag.
+
 # License
 
 Renderable.js is released under the GNU General Public License (GNU GPL) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
