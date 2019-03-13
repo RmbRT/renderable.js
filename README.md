@@ -99,7 +99,7 @@ Substitution is automatically disabled in `code`, `script`, `style`, and the cus
 It is also possible to turn on substitution in a disabled tag by adding the `data-renderablejs-ignore=no` attribute.
 If it is present, but not set to `no`, it also suppresses substitution.
 Note that you cannot turn on substitution inside a tag whose parent tag has disabled substitution.
-Also note that if a substitution results in a placeholder being generated, it is automatically wrapped in an `x-renderablejs-ignore` tag.
+Also note that if a substitution results in a placeholder being generated, it is not substituted again.
 
 # License
 
