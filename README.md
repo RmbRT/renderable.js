@@ -1,4 +1,4 @@
-# Renderable.js
+# ![Renderable.js](logo.png?raw=true "Renderable.js logo")
 
 > Free lightweight dynamic component rendering framework.
 
