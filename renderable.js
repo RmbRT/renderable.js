@@ -107,7 +107,7 @@ const Renderable =
 
 		if("render" in obj)
 			throw new Error("Object must not yet have a 'render' function.");
-		obj.toString = obj.render = Renderable._internal.public_render;
+		obj.toString = obj.render = Renderable._internal.render;
 
 		if("anchor" in params)
 		{
@@ -188,8 +188,7 @@ const Renderable =
 	@param renderable:
 		The renderable object to render.
 	@return
-		Whether any modifications to the document resulted from rendering the object.
-		Also returns true if the element has no anchors. */
+		Whether the renderable object changed its contents since the previous rendering. */
 	render(renderable)
 	{
 		Renderable.assertRenderable(renderable);
@@ -202,28 +201,24 @@ const Renderable =
 		if(typeof anchor === 'string')
 			anchor = document.getElementsByName("render."+anchor);
 
+		var out = {};
+		let html = renderable.render(out);
+		if(!out.changed)
+			return false;
+
 		// If the renderable is in the document, render it.
 		if(anchor.length)
 		{
-			var out = {};
-			let html = renderable.render(out);
-
-			if(!out.changed)
-				return false;
-
 			var parsed = document.createElement("span");
 			parsed.innerHTML = html;
 			var copy = anchor.length > 1;
 
-			var changed = false;
 			for(let a of anchor)
 				if(parsed.innerHTML !== a.innerHTML)
-				{
-					if(Renderable._internal.render(parsed, a, copy))
-						changed = true;
-				}
-			return changed;
-		} else return true;
+					Renderable._internal.replace(parsed, a, copy);
+		}
+
+		return true;
 	},
 
 	/** Checks whether a renderable object is currently locked.
@@ -266,7 +261,7 @@ const Renderable =
 	},
 
 	/** Invalidates a renderable object, and triggers a re-render.
-		Calls Renderable.render, and if it returns true, then all parents are invalidated as well. This function is called automatically whenever a renderable property is changed. If a renderable object has unregistered properties, this function has to be called manually after each modification.
+		Calls Renderable.render, and if it returns true, then all parents are invalidated as well. This function is called automatically whenever a renderable property is changed. If a renderable object has unregistered properties, this function has to be called manually after each modification of those properties.
 	@param renderable:
 		The renderable object to invalidate. */
 	invalidate(renderable)
@@ -280,9 +275,9 @@ const Renderable =
 
 	_internal:
 	{
-		render(update, anchor, clone)
+		/** Replaces `anchor` with `update` by replacing only affected parts of the DOM. */
+		replace(update, anchor, clone)
 		{
-			var changed = false;
 			var cu = update.firstChild;
 			var ca = anchor.firstChild;
 
@@ -295,12 +290,28 @@ const Renderable =
 				|| ca.nodeValue !== cu.nodeValue)
 				{
 					anchor.replaceChild(clone ? cu.cloneNode(true) : cu, ca);
-					changed = true;
-				} else
+				} else if(ca.nodeType === Node.ELEMENT_NODE)
 				{
-					if(ca.outerHTML !== cu.outerHTML)
-						if(Renderable._internal.render(cu, ca, clone))
-							changed = true;
+					// Ensure both nodes have the same tag name.
+					if(ca.tagName !== cu.tagName)
+						ca.tagName = cu.tagName;
+
+					// Add all attributes that are not in the anchor.
+					for(var attr of cu.attributes)
+						if(ca.attributes.getNamedItem(attr.name) !== attr.value)
+							ca.attributes.setNamedItem(attr.name, attr.value);
+					// Remove all attributes that are not in the update.
+					for(var attr of ca.attributes)
+						if(!cu.attributes.getNamedItem(attr.name))
+							ca.attributes.removeNamedItem(attr.name);
+
+					// Ensure that the contents match.
+					if(ca.innerHTML !== cu.innerHTML)
+						Renderable._internal.replace(cu, ca, clone);
+				} else if(ca.nodeType === Node.TEXT_NODE)
+				{
+					if(ca.nodeValue !== cu.nodeValue)
+						ca.nodeValue = cu.nodeValue;
 				}
 
 				ca = na;
@@ -311,7 +322,6 @@ const Renderable =
 			{
 				var nu = cu.nextSibling;
 				anchor.appendChild(clone ? cu.cloneNode(true) : cu);
-				changed = true;
 				cu = nu;
 			}
 
@@ -319,21 +329,19 @@ const Renderable =
 			{
 				var na = ca.nextSibling;
 				anchor.removeChild(ca);
-				changed = true;
 				ca = na;
 			}
-
-			return changed;
 		},
 
-		public_render(obj)
+		/** The default render function that is assigned to each renderable object. */
+		render(obj)
 		{
 			if(this._renderable.rendering)
 				throw new Error("Fractal rendering occurred!");
 			if(this._renderable.dirty)
 			{
 				this._renderable.rendering = true;
-				let new_html = `<span>${this._renderable.render.apply(this).replace(/\$\{render\.(.+?)\}/g, "${{render.$1}}")}</span>`;
+				let new_html = this._renderable.render.apply(this).replace(/\$\{render\.(.+?)\}/g, "${{render.$1}}");
 				if(obj)
 				{
 					obj.changed = (this._renderable.cache !== new_html);
@@ -345,49 +353,55 @@ const Renderable =
 			return this._renderable.cache;
 		},
 
+		/** Replaces anchor placeholders (${render.anchor} strings) with anchor tags in a node. */
 		replace_placeholders(node)
 		{
-			if(node.nodeType == Node.TEXT_NODE)
+			switch(node.nodeType)
 			{
-				const regex = /\$\{render\.(.+?)\}/g;
-				var match;
-				while((match = regex.exec(node.nodeValue)) !== null)
+			case Node.TEXT_NODE:
 				{
-					let name = match[1];
-					var anchor = document.createElement("A");
-					anchor.name="render." + match[1];
-					if(name in render)
+					const regex = /\$\{render\.(.+?)\}/g;
+					var match;
+					while((match = regex.exec(node.nodeValue)) !== null)
 					{
-						anchor.innerHTML = render[name].render();
-						if(render[name]._renderable.anchor instanceof Array)
-							render[name]._renderable.anchor.push(anchor);
-					} else
-					{
-						anchor.innerHTML = `\${{render.${name}}}`;
-					}
+						let name = match[1];
+						var anchor = document.createElement("A");
+						anchor.name="render." + match[1];
+						if(name in render)
+						{
+							anchor.innerHTML = render[name].render();
+							if(render[name]._renderable.anchor instanceof Array)
+								render[name]._renderable.anchor.push(anchor);
+						} else
+						{
+							anchor.innerHTML = `\${{render.${name}}}`;
+						}
 
-					// put the rest of the text into a new text node.
-					var newTextNode = document.createTextNode(node.textContent.substring(match.index+match[0].length));
-					// insert the left part of the text into the old text node.
-					node.textContent = node.textContent.substr(0, match.index);
-					// insert newTextNode after node into the parent node.
-					if(node.nextSibling !== null) {
-						node.parentNode.insertBefore(newTextNode, node.nextSibling);
-					} else {
-						node.parentNode.appendChild(newTextNode);
+						// put the rest of the text into a new text node.
+						var newTextNode = document.createTextNode(node.textContent.substring(match.index+match[0].length));
+						// insert the left part of the text into the old text node.
+						node.textContent = node.textContent.substr(0, match.index);
+						// insert newTextNode after node into the parent node.
+						if(node.nextSibling !== null) {
+							node.parentNode.insertBefore(newTextNode, node.nextSibling);
+						} else {
+							node.parentNode.appendChild(newTextNode);
+						}
+						// insert the link between the left and right part.
+						node.parentNode.insertBefore(anchor, node.nextSibling);
+						// continue replacing the rest of the text node.
+						node = newTextNode;
 					}
-					// insert the link between the left and right part.
-					node.parentNode.insertBefore(anchor, node.nextSibling);
-					// continue replacing the rest of the text node.
-					node = newTextNode;
-				}
-			} else if(node.nodeType == Node.ELEMENT_NODE)
-			{
-				for(var c of node.childNodes)
-					Renderable._internal.replace_placeholders(c);
+				} break;
+			case Node.ELEMENT_NODE:
+				{
+					for(var c of node.childNodes)
+						Renderable._internal.replace_placeholders(c);
+				} break;
 			}
 		},
 
+		/** Registers the DOM mutation observer that automatically detects anchor placeholders in new nodes. */
 		register_mutation_observer()
 		{
 			var observer = new MutationObserver(function(notifications, observer)
@@ -423,6 +437,7 @@ const Renderable =
 	}
 };
 
+// Ensure the global render namespace exists.
 window.render = {};
 
 document.addEventListener("DOMContentLoaded", function() {
