@@ -298,8 +298,18 @@ const Renderable =
 
 					// Add all attributes that are not in the anchor.
 					for(var attr of cu.attributes)
-						if(ca.attributes.getNamedItem(attr.name) !== attr.value)
-							ca.attributes.setNamedItem(attr.name, attr.value);
+					{
+						var attrca = ca.attributes.getNamedItem(attr.name);
+						if(!attrca)
+						{
+							attrca = document.createAttribute(attr.name);
+							attrca.value = attr.value;
+							ca.attributes.setNamedItem(attrca);
+						} else if(attrca.value !== attr.value)
+						{
+							attrca.value = attr.value;
+						}
+					}
 					// Remove all attributes that are not in the update.
 					for(var attr of ca.attributes)
 						if(!cu.attributes.getNamedItem(attr.name))
