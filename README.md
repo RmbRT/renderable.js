@@ -47,13 +47,11 @@ Renderable.create({}, {
 	render() {
 		return `Hello, ${render.user}, it's nice to see you!`;
 	},
-	children: [render.user],
 	anchor: "greeting"
 });
 ```
 
-Note, that whenever you access a renderable from within another renderable, you have to add it in the `children` parameter.
-This registers a dependency between the renderables, and when the utilised renderable is updated, the other renderable is also updated.
+When the utilised renderable is updated, the other renderable is also updated.
 This ensures that you can save a lot of code duplication.
 
 ```xml

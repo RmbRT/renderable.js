@@ -196,15 +196,15 @@ const Renderable =
 		if(Renderable.isLocked(renderable) || !renderable._renderable.dirty)
 			return false;
 
+		var out = {};
+		let html = renderable.render(out);
+		if(!out.changed)
+			return false;
 
 		var anchor = renderable._renderable.anchor;
 		if(typeof anchor === 'string')
 			anchor = document.getElementsByName("render."+anchor);
 
-		var out = {};
-		let html = renderable.render(out);
-		if(!out.changed)
-			return false;
 
 		// If the renderable is in the document, render it.
 		if(anchor.length)
@@ -214,7 +214,7 @@ const Renderable =
 			var copy = anchor.length > 1;
 
 			for(let a of anchor)
-				if(parsed.innerHTML !== a.innerHTML)
+				if(html !== a.innerHTML)
 					Renderable._internal.replace(parsed, a, copy);
 		}
 
@@ -338,9 +338,19 @@ const Renderable =
 		{
 			if(this._renderable.rendering)
 				throw new Error("Fractal rendering occurred!");
+			// Ensure that the renderable using this renderable is registered as parent.
+			let renderstack = Renderable._internal.renderstack;
+			if(Renderable._internal.renderstack.length)
+			{
+				let last = renderstack[renderstack.length-1];
+				if(!this._renderable.parents.find(e => last === e))
+					this._renderable.parents.push(last);
+			}
 			if(this._renderable.dirty)
 			{
 				this._renderable.rendering = true;
+
+				Renderable._internal.renderstack.push(this);
 				// Ignore render placeholders within the output.
 				let new_html = this._renderable.render.apply(this);
 				if(obj)
@@ -350,6 +360,7 @@ const Renderable =
 				this._renderable.cache = new_html;
 				this._renderable.dirty = false;
 				this._renderable.rendering = false;
+				Renderable._internal.renderstack.pop();
 			}
 			return this._renderable.cache;
 		},
@@ -369,8 +380,8 @@ const Renderable =
 					if((match = regex.exec(node.nodeValue)) !== null)
 					{
 						let name = match[1];
-						var anchor = document.createElement("A");
-						anchor.name="render." + match[1];
+						var anchor = document.createElement("X-RENDERABLEJS-IGNORE");
+						anchor.setAttribute("name", "render." + match[1]);
 						if(name in render)
 						{
 							anchor.innerHTML = render[name].render();
@@ -422,7 +433,7 @@ const Renderable =
 				if((node.tagName in Renderable._internal.forbidden_tags)
 				|| node.hasAttribute("data-renderablejs-ignore"))
 				{
-					if((node.getAttribute("data-renderablejs-ignore")||"") !== "no")
+					if((node.getAttribute("data-renderablejs-ignore")||"").toLowerCase() !== "no")
 						return true;
 				}
 				if((node.name || "").match(/render\..+/))
@@ -466,7 +477,9 @@ const Renderable =
 			};
 
 			observer.observe(document.body, observer.state);
-		}
+		},
+
+		renderstack: []
 	}
 };
 
