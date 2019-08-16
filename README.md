@@ -70,7 +70,7 @@ Renderable.create({
 	time: new Date()
 }, {
 	render() {
-		return `${this.time.getHours()}:${this.time.getMinutes}`;
+		return `${this.time.getHours()}:${this.time.getMinutes()}`;
 	},
 	anchor: "time"
 });
