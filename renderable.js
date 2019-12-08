@@ -77,7 +77,7 @@ const Renderable =
 							}
 						}; })(name)
 				});
-			}
+			} else console.warn(`addFields: Property '${name}' added twice.`);
 		}
 
 		return obj;
@@ -161,6 +161,7 @@ const Renderable =
 	/** Creates a new renderable object.
 	@param fields:
 		An object containing the properties to generate for the renderable object and their initial values.
+		All fields in the object are tracked and modification will result in a re-render.
 	@param params:
 		An object containing parameters:
 
@@ -171,12 +172,15 @@ const Renderable =
 			Either an Element, an Element array, or a string. If it is a string, renders into all elements with the name "render.x", where x is the anchor string, and saves the object into the global render.x (again, where x is the anchor string).
 		* children:
 			Optional: The renderable objects this object uses internally.
-			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects. */
-	create(fields, params)
+			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects.
+	@param untracked:
+		(Optional) An object containing additional properties of the renderable object and their initial values.
+		Fields in this object will not be tracked and modifications will not result in a re-render. */
+	create(fields, params, untracked)
 	{
 		var r = Renderable.addFields(
 			Renderable.enable(
-				{ },
+				Object.assign({}, untracked),
 				params),
 			fields);
 		Renderable.render(r);
