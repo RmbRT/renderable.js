@@ -52,33 +52,50 @@ const Renderable =
 	},
 
 	/** Adds renderable properties to a renderable object.
-		When a renderable property is changed, the associated renderable object is re-rendered.
+		When a renderable property is changed, the associated renderable object is re-rendered. Passing a renderable object as `fields` will share its properties with the extended object. Changes made to the properties will then trigger re-rendering of both objects.
 	@param obj:
 		The renderable object.
 	@param fields:
-		An object containing the properties to be added, as well as their initial values. */
+		An object containing the properties to be added, as well as their initial values. Can be a renderable object. */
 	addFields(obj, fields)
 	{
 		Renderable.assertRenderable(obj);
 
+		if(Renderable.isRenderable(fields))
+		{
+			obj._renderable.children.push(fields);
+			fields._renderable.parents.push(obj);
+		}
+
+		const ignore = {render: null, _renderable: null, toString: null};
 		for(name in fields)
 		{
+			if(name in ignore)
+				continue;
+
 			if(!(name in obj))
 			{
-				obj._renderable.values[name] = fields[name];
+				obj._renderable.values.push(name);
 				Object.defineProperty(obj, name, {
-					get: ((name) => { return function(){ return this._renderable.values[name]; }; })(name),
+					get: ((name) => { return function(){ return fields[name]; }; })(name),
 					set: ((name) => { return function(value)
 						{
-							if(this._renderable.values[name] !== value)
+							if(fields[name] !== value)
 							{
-								this._renderable.values[name] = value;
+								fields[name] = value;
 								Renderable.invalidate(this);
 							}
 						}; })(name)
 				});
 			} else console.warn(`addFields: Property '${name}' added twice.`);
 		}
+
+		if(Renderable.isRenderable(fields))
+			for(name of fields._renderable.values)
+				Object.defineProperty(obj, name, {
+					get: ((name) => { return function(){ return fields[name]; }; })(name),
+					set: ((name) => { return function(){ fields[name] = value; }}),
+				});
 
 		return obj;
 	},
@@ -124,7 +141,7 @@ const Renderable =
 
 		obj._renderable =
 		{
-			values: {},
+			values: [],
 			locked: 0,
 			dirty: true,
 			anchor: params.anchor || [],
