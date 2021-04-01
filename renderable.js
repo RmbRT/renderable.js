@@ -3,7 +3,7 @@
  * @licstart  The following is the entire license notice for the 
  *  JavaScript code in this page.
  *
- * Copyright (C) 2019  RmbRT
+ * Copyright (C) 2019, 2021  RmbRT
  *
  *
  * The JavaScript code in this page is free software: you can
@@ -502,5 +502,6 @@ window.render = {};
 
 document.addEventListener("DOMContentLoaded", function() {
 	Renderable._internal.replace_placeholders(document.body);
+	Renderable._internal.replace_placeholders(document.head);
 	Renderable._internal.register_mutation_observer();
 });
