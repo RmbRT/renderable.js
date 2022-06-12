@@ -3,7 +3,7 @@
  * @licstart  The following is the entire license notice for the 
  *  JavaScript code in this page.
  *
- * Copyright (C) 2019, 2021  RmbRT
+ * Copyright (C) 2019, 2021, 2022  RmbRT
  *
  *
  * The JavaScript code in this page is free software: you can
@@ -113,8 +113,10 @@ const Renderable =
 			Either an Element, an Element array, or a string. If it is a string, renders into all elements with the name "render.x", where x is the anchor string, and saves the object into the global render.x (again, where x is the anchor string).
 		* children:
 			Optional: The renderable objects this object uses internally.
-			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects. */
-	enable(obj, params)
+			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects.
+	@param trackingId:
+		Optional: A unique ID for linking DOM events back to the renderable. */
+	enable(obj, params, trackingId)
 	{
 		if(Renderable.isRenderable(obj))
 			throw new Error("Object must not yet be renderable.");
@@ -149,8 +151,18 @@ const Renderable =
 			parents: [],
 			render: params.render,
 			cache: null,
-			rendering: false
+			cache_final: null,
+			rendering: false,
+			events: params.events || {},
 		};
+
+		// Activate all necessary events.
+		Renderable.listenForEvents(Object.keys(obj._renderable.events));
+
+		if(trackingId !== undefined) {
+			obj._renderable.id = trackingId;
+			Renderable._internal.uniqueRenderables[trackingId] = new WeakRef(obj);
+		}
 
 		if("children" in params)
 		{
@@ -190,6 +202,8 @@ const Renderable =
 		* children:
 			Optional: The renderable objects this object uses internally.
 			If any of the children is updated, this object will also be updated. Allowed values are either a renderable object, or an array of renderable objects.
+		* events:
+			Optional: Event handlers for DOM events. Only used when calling Renderable.createInteractive().
 	@param untracked:
 		(Optional) An object containing additional properties of the renderable object and their initial values.
 		Fields in this object will not be tracked and modifications will not result in a re-render. */
@@ -198,11 +212,27 @@ const Renderable =
 		var r = Renderable.addFields(
 			Renderable.enable(
 				Object.assign({}, untracked),
-				params),
+				params,
+				undefined),
 			fields);
 		Renderable.render(r);
 		return r;
 	},
+
+	/** Creates a new renderable object that gives its outermost tags an ID used for linking DOM events back to the renderable. */
+	createInteractive: (function() {
+		let counter = 0n;
+		return function createUnique(fields, params, untracked) {
+			var r = Renderable.addFields(
+				Renderable.enable(
+					Object.assign({}, untracked),
+					params,
+					counter++),
+				fields);
+			Renderable.render(r);
+			return r;
+		};
+	})(),
 
 	/** Renders the renderable object into all its anchors.
 		Only modifies differing elements in the document, to minimise the amount of re-rendering done by the browser.
@@ -389,11 +419,23 @@ const Renderable =
 					obj.changed = (this._renderable.cache !== new_html);
 				}
 				this._renderable.cache = new_html;
+
+				// If interactive, inject renderable's ID into the new HTML.
+				if(obj.changed && this._renderable.id !== undefined) {
+					var root = document.createElement("span");
+					root.innerHTML = this._renderable.cache;
+					for(let tag of root.children)
+						tag.dataset.renderableId = this._renderable.id;
+					this._renderable.cache_final = root.innerHTML;
+				} else {
+					this._renderable.cache_final = this._renderable.cache;
+				}
+
 				this._renderable.dirty = false;
 				this._renderable.rendering = false;
 				Renderable._internal.renderstack.pop();
 			}
-			return this._renderable.cache;
+			return this._renderable.cache_final;
 		},
 
 		/** Replaces anchor placeholders (${render.anchor} strings) with anchor tags in a node. */
@@ -510,12 +552,56 @@ const Renderable =
 			observer.observe(document.body, observer.state);
 		},
 
-		renderstack: []
+		renderstack: [],
+
+		eventListeners: {},
+		uniqueRenderables: {}
+	},
+
+	listenForEvents(events) {
+		let listeners = Renderable._internal.eventListeners;
+		for(let name of events) {
+			if(name in listeners)
+				continue;
+
+			listeners[name] = ((name) => (e) => {
+				for(let target = e.target; target; target = target.parentElement) {
+					if("renderableId" in target.dataset) {
+						let id = target.dataset.renderableId;
+						let r = Renderable._internal.uniqueRenderables[id]?.deref();
+						r?._renderable.events[e.type]?.call(r, e);
+					}
+				}
+			})(name);
+			document.addEventListener(name, listeners[name]);
+		}
+	},
+
+	unlistenEvents(events) {
+		let listeners = Renderable._internal.eventListeners;
+		for(let event of events) {
+			document.removeEventListener(event, listeners[event])
+			delete listeners[event];
+		}
+	},
+
+	unlistenAllEvents() {
+		Renderable.unlistenEvents(Object.keys(Renderable._internal.eventListeners));
 	}
 };
 
 // Ensure the global render namespace exists.
 window.render = {};
+
+// Every minute, clear the interactive renderable map.
+setInterval(() => {
+	let map = Renderable._internal.uniqueRenderables;
+	for(let id in map) {
+		if(map[id].deref() === undefined) {
+			delete(map[id]);
+		}
+	}
+}, 60000);
 
 document.addEventListener("DOMContentLoaded", function() {
 	Renderable._internal.replace_placeholders(document.body);
