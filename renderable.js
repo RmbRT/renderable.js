@@ -367,8 +367,13 @@ const Renderable =
 							ca.attributes.removeNamedItem(attr.name);
 
 					// Ensure that the contents match.
-					if(ca.innerHTML !== cu.innerHTML)
-						Renderable._internal.replace(cu, ca, clone);
+					if(ca.innerHTML !== cu.innerHTML) {
+						try {
+							Renderable._internal.replace(cu, ca, clone);
+						} catch(_) {
+							ca.innerHTML = cu.innerHTML;
+						}
+					}
 				} else if(ca.nodeType === Node.TEXT_NODE)
 				{
 					if(ca.nodeValue !== cu.nodeValue)
