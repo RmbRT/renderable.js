@@ -215,6 +215,8 @@ const Renderable =
 				params,
 				undefined),
 			fields);
+		if(typeof params["constructor"] === "function")
+			params["constructor"].call(r);
 		Renderable.render(r);
 		return r;
 	},
@@ -222,13 +224,15 @@ const Renderable =
 	/** Creates a new renderable object that gives its outermost tags an ID used for linking DOM events back to the renderable. */
 	createInteractive: (function() {
 		let counter = 0n;
-		return function createUnique(fields, params, untracked) {
+		return function createInteractive(fields, params, untracked) {
 			var r = Renderable.addFields(
 				Renderable.enable(
 					Object.assign({}, untracked),
 					params,
 					counter++),
 				fields);
+			if(typeof params["constructor"] === "function")
+				params["constructor"].call(r);
 			Renderable.render(r);
 			return r;
 		};
