@@ -573,15 +573,23 @@ const Renderable =
 			if(name in listeners)
 				continue;
 
-			listeners[name] = ((name) => (e) => {
-				for(let target = e.target; target; target = target.parentElement) {
-					if("renderableId" in target.dataset) {
+			listeners[name] = (e) => {
+				let renderable;
+				for(let target = e.target; target; target = target?.parentElement) {
+					if("renderableId" in (target.dataset ?? {})) {
 						let id = target.dataset.renderableId;
 						let r = Renderable._internal.uniqueRenderables[id]?.deref();
-						r?._renderable.events[e.type]?.call(r, e);
+						renderable = renderable ?? r;
+						let handler = r?._renderable.events[e.type];
+						if(handler && !handler.call(r, {
+							type: e.type,
+							target: e.target,
+							scope: renderable,
+							bubbled: r != renderable,
+						})) return;
 					}
 				}
-			})(name);
+			};
 			document.addEventListener(name, listeners[name]);
 		}
 	},
