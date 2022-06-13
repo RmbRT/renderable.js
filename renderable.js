@@ -432,8 +432,11 @@ const Renderable =
 				if(changed && this._renderable.id !== undefined) {
 					var root = document.createElement("span");
 					root.innerHTML = this._renderable.cache;
-					for(let tag of root.children)
-						tag.dataset.renderableId = this._renderable.id;
+					for(let tag of root.children) {
+						let ids = tag.dataset?.renderableId ?? "";
+						ids = ids.split(",").concat([this._renderable.id]).join();
+						tag.dataset.renderableId = ids;
+					}
 					this._renderable.cache_final = root.innerHTML;
 				} else {
 					this._renderable.cache_final = this._renderable.cache;
@@ -575,8 +578,7 @@ const Renderable =
 			listeners[name] = (e) => {
 				let renderable;
 				for(let target = e.target; target; target = target?.parentElement) {
-					if("renderableId" in (target.dataset ?? {})) {
-						let id = target.dataset.renderableId;
+					for(let id of (target.dataset?.renderableId?.split(",")??[])) {
 						let r = Renderable._internal.uniqueRenderables[id]?.deref();
 						renderable = renderable ?? r;
 						let handler = r?._renderable.events[e.type];
