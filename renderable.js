@@ -423,14 +423,13 @@ const Renderable =
 				Renderable._internal.renderstack.push(this);
 				// Ignore render placeholders within the output.
 				let new_html = this._renderable.render.apply(this);
+				let changed = (this._renderable.cache !== new_html);
 				if(obj)
-				{
-					obj.changed = (this._renderable.cache !== new_html);
-				}
+					obj.changed = changed;
 				this._renderable.cache = new_html;
 
 				// If interactive, inject renderable's ID into the new HTML.
-				if(obj.changed && this._renderable.id !== undefined) {
+				if(changed && this._renderable.id !== undefined) {
 					var root = document.createElement("span");
 					root.innerHTML = this._renderable.cache;
 					for(let tag of root.children)
