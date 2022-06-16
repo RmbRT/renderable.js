@@ -349,7 +349,13 @@ const Renderable =
 				{
 					// Ensure both nodes have the same tag name.
 					if(ca.tagName !== cu.tagName)
-						ca.tagName = cu.tagName;
+					{
+						// Workaround for changing an element's tag name.
+						let dummy = document.createElement(cu.tagName);
+						dummy.replaceChildren(...ca.childNodes);
+						ca.replaceWith(dummy);
+						ca = dummy;
+					}
 
 					// Add all attributes that are not in the anchor.
 					for(var attr of cu.attributes)
@@ -372,11 +378,7 @@ const Renderable =
 
 					// Ensure that the contents match.
 					if(ca.innerHTML !== cu.innerHTML) {
-						try {
-							Renderable._internal.replace(cu, ca, clone);
-						} catch(_) {
-							ca.innerHTML = cu.innerHTML;
-						}
+						Renderable._internal.replace(cu, ca, clone);
 					}
 				} else if(ca.nodeType === Node.TEXT_NODE)
 				{
