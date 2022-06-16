@@ -147,7 +147,7 @@ const Renderable =
 			locked: 0,
 			dirty: true,
 			anchor: params.anchor || [],
-			children: [],
+			children: [], // Overwritten each rendering: child renderables.
 			parents: [],
 			render: params.render,
 			cache: null,
@@ -417,10 +417,16 @@ const Renderable =
 				let last = renderstack[renderstack.length-1];
 				if(!this._renderable.parents.find(e => last === e))
 					this._renderable.parents.push(last);
+				// Prevent renderables from being garbage-collected before the next re-render of the parent.
+				let lastChildren = last._renderable.children;
+				if(!lastChildren.includes(this))
+					lastChildren.push(this);
 			}
 			if(this._renderable.dirty)
 			{
 				this._renderable.rendering = true;
+				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
+				this._renderable.children = [];
 
 				Renderable._internal.renderstack.push(this);
 				// Ignore render placeholders within the output.
