@@ -311,7 +311,9 @@ const Renderable =
 		if(Renderable.isLocked(renderable))
 		{
 			if(!--renderable._renderable.locked)
-				Renderable.render(renderable);
+				if(Renderable.render(renderable))
+					for(parent of renderable._renderable.parents)
+						Renderable.invalidate(parent);
 		}
 	},
 
