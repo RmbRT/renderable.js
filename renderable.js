@@ -441,8 +441,8 @@ const Renderable =
 					var root = document.createElement("span");
 					root.innerHTML = this._renderable.cache;
 					for(let tag of root.children) {
-						let ids = tag.dataset?.renderableId ?? "";
-						ids = ids.split(",").concat([this._renderable.id]).join();
+						let ids = tag.dataset?.renderableId?.split(",") ?? [];
+						ids = ids.concat([this._renderable.id]).join();
 						tag.dataset.renderableId = ids;
 					}
 					this._renderable.cache_final = root.innerHTML;
