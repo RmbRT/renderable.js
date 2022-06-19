@@ -427,6 +427,9 @@ const Renderable =
 			if(this._renderable.dirty)
 			{
 				this._renderable.rendering = true;
+				// Remove this node as parent from all previous rendering's children.
+				for(const child of this._renderable.children)
+					child._renderable.parents = child._renderable.parents.filter(p => p !== this);
 				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
 				this._renderable.children = [];
 
