@@ -410,6 +410,8 @@ const Renderable =
 		/** The default render function that is assigned to each renderable object. */
 		render(obj)
 		{
+			Renderable.assertRenderable(this);
+
 			if(this._renderable.rendering)
 				throw new Error("Fractal rendering occurred!");
 			// Ensure that the renderable using this renderable is registered as parent.
@@ -442,17 +444,20 @@ const Renderable =
 				this._renderable.cache = new_html;
 
 				// If interactive, inject renderable's ID into the new HTML.
-				if(changed && this._renderable.id !== undefined) {
-					var root = document.createElement("span");
-					root.innerHTML = this._renderable.cache;
-					for(let tag of root.children) {
-						let ids = tag.dataset?.renderableId?.split(",") ?? [];
-						ids = ids.concat([this._renderable.id]).join();
-						tag.dataset.renderableId = ids;
+				if(this._renderable.id !== undefined) {
+					if(changed) {
+						var root = document.createElement("span");
+						root.innerHTML = this._renderable.cache;
+						for(let tag of root.children) {
+							let ids = tag.dataset?.renderableId?.split(",") ?? [];
+							ids = ids.concat([this._renderable.id]).join();
+							tag.dataset.renderableId = ids;
+						}
+						this._renderable.cache_final = root.innerHTML;
 					}
-					this._renderable.cache_final = root.innerHTML;
 				} else {
-					this._renderable.cache_final = this._renderable.cache;
+					if(changed)
+						this._renderable.cache_final = this._renderable.cache;
 				}
 
 				this._renderable.dirty = false;
