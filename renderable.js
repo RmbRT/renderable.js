@@ -252,6 +252,7 @@ const Renderable =
 			return false;
 
 		var out = {};
+		const start = new Date();
 		let html = renderable.render(out);
 		if(!out.changed)
 			return false;
@@ -272,6 +273,10 @@ const Renderable =
 				if(html !== a.innerHTML)
 					Renderable._internal.replace(parsed, a, copy);
 		}
+		const end = new Date();
+		const diff = end - start;
+		if(diff > 10)
+			console.warn(`Rendered within ${diff}ms`);
 
 		return true;
 	},
