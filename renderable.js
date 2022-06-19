@@ -154,6 +154,7 @@ const Renderable =
 			cache_final: null,
 			rendering: false,
 			events: params.events || {},
+			constructing: true
 		};
 
 		// Activate all necessary events.
@@ -218,6 +219,7 @@ const Renderable =
 		if(typeof params["constructor"] === "function")
 			params["constructor"].call(r);
 		Renderable.render(r);
+		delete r._renderable.constructing;
 		return r;
 	},
 
@@ -234,6 +236,7 @@ const Renderable =
 			if(typeof params["constructor"] === "function")
 				params["constructor"].call(r);
 			Renderable.render(r);
+			delete r._renderable.constructing;
 			return r;
 		};
 	})(),
@@ -277,6 +280,10 @@ const Renderable =
 		const diff = end - start;
 		if(diff > 10)
 			console.warn(`Rendered within ${diff}ms`);
+	
+		if(!renderable._renderable.constructing)
+			for(const parent of renderable._renderable.parents)
+				Renderable.invalidate(parent);
 
 		return true;
 	},
@@ -314,12 +321,8 @@ const Renderable =
 	{
 		Renderable.assertRenderable(renderable);
 		if(Renderable.isLocked(renderable))
-		{
 			if(!--renderable._renderable.locked)
-				if(Renderable.render(renderable))
-					for(parent of renderable._renderable.parents)
-						Renderable.invalidate(parent);
-		}
+				Renderable.render(renderable);
 	},
 
 	/** Invalidates a renderable object, and triggers a re-render.
@@ -330,9 +333,7 @@ const Renderable =
 	{
 		Renderable.assertRenderable(renderable);
 		renderable._renderable.dirty = true;
-		if(Renderable.render(renderable))
-			for(parent of renderable._renderable.parents)
-				Renderable.invalidate(parent);
+		Renderable.render(renderable);
 	},
 
 	_internal:
