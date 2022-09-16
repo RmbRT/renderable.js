@@ -13,9 +13,9 @@ In your script, simply create a new component by writing the following:
 
 ```javascript
 Renderable.create({
-	lastName: "Stallman",
-	firstName: "Richard M.",
-	title: "Dr."
+	lastName: "Davis",
+	firstName: "Terrence Andrew",
+	title: "Saint"
 }, {
 	render() {
 		return `${this.title} ${this.firstName} ${this.lastName}`.trim();
@@ -45,7 +45,7 @@ You can easily compose components out of other components, to reuse them:
 ```javascript
 Renderable.create({}, {
 	render() {
-		return `Hello, ${render.user}, it's nice to see you!`;
+		return `Hello, ${render.user}, peace unto you!`;
 	},
 	anchor: "greeting"
 });
@@ -98,6 +98,51 @@ It is also possible to turn on substitution in a disabled tag by adding the `dat
 If it is present, but not set to `no`, it also suppresses substitution.
 Note that you cannot turn on substitution inside a tag whose parent tag has disabled substitution.
 Also note that if a substitution results in a placeholder being generated, it is not substituted again.
+
+**Events and interactions**&emsp;
+You can create _interactive renderables_ which are treated differently from usual renderables and can receive events sent to their corresponding HTML elements.
+This is done with `Renderable.createInteractive`, and supplying an `events` property in the second argument.
+
+```js
+function button(text, {onClick, anchor}) {
+	return Renderable.createInteractive({text, onClick}, {
+		render() { return `<button>${this.text}</button>`; },
+		events: {
+			click() { this.onClick() }
+		},
+		anchor
+	});
+}
+```
+
+```js
+Renderable.create({
+		"list": ["wooden door", "bicycle exercise trainer", "barbecue"]
+	}, {
+		anchor: "myList",
+		render() {
+			return `
+<ul class="removable-list">
+	${this.list.map((text, i) => `
+	<li>${text} ${
+		button("x", {
+			onClick: () => {
+				// Remove entry from list.
+				this.list.splice(i, 1);
+				// Re-render.
+				Renderable.invalidate(this);
+			}
+		})
+	}</li>`).join("")
+}</ul>`;
+		}
+	});
+```
+
+```xml
+<h1>Shopping list</h1>
+${render.myList}
+```
 
 # License
 
