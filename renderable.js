@@ -28,6 +28,14 @@
 
 console.info("This site is using renderable.js, which is free software; you can view its license and original source code at https://github.com/RmbRT/renderable.js");
 
+
+(() => {
+var isBrowser = typeof global === "undefined";
+var globalScope = (isBrowser ? window : global);
+var declareGlobals = (isBrowser || globalScope.RenderableUseGlobal);
+
+// Ensure the global render namespace exists.
+var render = {};
 const Renderable =
 {
 	/** Detect whether an object is a renderable object.
@@ -68,7 +76,7 @@ const Renderable =
 		}
 
 		const ignore = {render: null, _renderable: null, toString: null};
-		for(name in fields)
+		for(let name in fields)
 		{
 			if(name in ignore)
 				continue;
@@ -130,7 +138,7 @@ const Renderable =
 
 		if("anchor" in params)
 		{
-			if(params.anchor instanceof Element)
+			if(params.anchor instanceof (globalScope.Element || function(){}))
 				params.anchor = [params.anchor];
 			else if(typeof params.anchor === 'string')
 			{
@@ -632,8 +640,12 @@ const Renderable =
 	}
 };
 
-// Ensure the global render namespace exists.
-window.render = {};
+if(declareGlobals) {
+	globalScope.Renderable = Renderable;
+	globalScope.render = render;
+} else {
+	(isBrowser ? {} : module).exports = { Renderable, render };
+}
 
 // Every minute, clear the interactive renderable map.
 setInterval(() => {
@@ -645,8 +657,10 @@ setInterval(() => {
 	}
 }, 60000);
 
-document.addEventListener("DOMContentLoaded", function() {
-	Renderable._internal.replace_placeholders(document.body);
-	Renderable._internal.replace_placeholders(document.head);
-	Renderable._internal.register_mutation_observer();
-});
+if("document" in globalScope)
+	document.addEventListener("DOMContentLoaded", function() {
+		Renderable._internal.replace_placeholders(document.body);
+		Renderable._internal.replace_placeholders(document.head);
+		Renderable._internal.register_mutation_observer();
+	});
+})();

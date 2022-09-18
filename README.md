@@ -144,6 +144,12 @@ Renderable.create({
 ${render.myList}
 ```
 
+## Server-side use
+
+If you're in a non-DOM context, like Node.js, you can simply `require()` renderable.js and it will return `{ Renderable, render }`.
+If you want to import it in a way that's more compatible with DOM-style JS (using global scope instead of modules), define `global.RenderableUseGlobal = true` before calling `require()`.
+This will define `Renderable` and `render` as global objects which will be visible in all scripts.
+
 # License
 
 Renderable.js is released under the GNU General Public License (GNU GPL) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
