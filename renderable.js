@@ -102,7 +102,7 @@ const Renderable =
 			for(name of fields._renderable.values)
 				Object.defineProperty(obj, name, {
 					get: ((name) => { return function(){ return fields[name]; }; })(name),
-					set: ((name) => { return function(){ fields[name] = value; }}),
+					set: ((name) => { return function(value){ fields[name] = value; }}),
 				});
 
 		return obj;
@@ -165,6 +165,14 @@ const Renderable =
 			constructing: true
 		};
 
+		// transitive anchor tracking throughout the parents.
+		obj._renderable.has_anchor = obj._renderable.anchor.length != 0;
+
+		let renderstack = Renderable._internal.renderstack;
+		if(renderstack.length){
+			obj._renderable.has_anchor ||= renderstack[renderstack.length-1]._renderable.has_anchor;
+		}
+
 		// Activate all necessary events.
 		Renderable.listenForEvents(Object.keys(obj._renderable.events));
 
@@ -196,6 +204,30 @@ const Renderable =
 		return obj;
 	},
 
+	with(renderable, perform)
+	{
+		Renderable.assertRenderable(renderable);
+		Renderable._internal.renderstack.push(renderable);
+		let result = perform(renderable);
+		Renderable._internal.renderstack.pop();
+		return result;
+	},
+
+	relay(e, renderable) {
+		Renderable.assertRenderable(renderable);
+		let handler = renderable._renderable.events[e.type];
+		return handler ? handler.call(renderable, {
+			...e,
+			bubbled: e.target != renderable,
+		}) : true;
+	},
+
+	fallback(event_type, renderable) {
+		if(event_type in Renderable._internal.eventListeners) {
+			Renderable._internal.eventListeners[event_type].fallback = renderable;
+		}
+	},
+
 	/** Creates a new renderable object.
 	@param fields:
 		An object containing the properties to generate for the renderable object and their initial values.
@@ -224,8 +256,10 @@ const Renderable =
 				params,
 				undefined),
 			fields);
+		Renderable._internal.renderstack.push(r);
 		if(typeof params["constructor"] === "function")
 			params["constructor"].call(r);
+		Renderable._internal.renderstack.pop();
 		Renderable.render(r);
 		delete r._renderable.constructing;
 		return r;
@@ -241,15 +275,17 @@ const Renderable =
 					params,
 					counter++),
 				fields);
+			Renderable._internal.renderstack.push(r);
 			if(typeof params["constructor"] === "function")
 				params["constructor"].call(r);
+			Renderable._internal.renderstack.pop();
 			Renderable.render(r);
 			delete r._renderable.constructing;
 			return r;
 		};
 	})(),
 
-	/** Renders the renderable object into all its anchors.
+	/** Renders the renderable object into all its anchors and parents.
 		Only modifies differing elements in the document, to minimise the amount of re-rendering done by the browser.
 	@param renderable:
 		The renderable object to render.
@@ -262,11 +298,18 @@ const Renderable =
 		if(Renderable.isLocked(renderable) || !renderable._renderable.dirty)
 			return false;
 
+		// Erase all parents, as they may be temporary. They will re-register themselves during their re-render.
+		let prev_parents = renderable._renderable.parents;
+		if(!renderable._renderable.constructing)
+			renderable._renderable.parents = [];
+
 		var out = {};
 		const start = new Date();
 		let html = renderable.render(out);
-		if(!out.changed)
+		if(!out.changed) {
+			renderable._renderable.parents = prev_parents;
 			return false;
+		}
 
 		var anchor = renderable._renderable.anchor;
 		if(typeof anchor === 'string')
@@ -290,8 +333,11 @@ const Renderable =
 			console.warn(`Rendered within ${diff}ms`);
 	
 		if(!renderable._renderable.constructing)
-			for(const parent of renderable._renderable.parents)
+		{
+			// notify all previous session's parents, in case they are still using this renderable.
+			for(const parent of prev_parents)
 				Renderable.invalidate(parent);
+		}
 
 		return true;
 	},
@@ -330,7 +376,10 @@ const Renderable =
 		Renderable.assertRenderable(renderable);
 		if(Renderable.isLocked(renderable))
 			if(!--renderable._renderable.locked)
-				Renderable.render(renderable);
+				if(!renderable._renderable.constructing && renderable._renderable.dirty)
+				{
+					Renderable.render(renderable);
+				}
 	},
 
 	/** Invalidates a renderable object, and triggers a re-render.
@@ -340,8 +389,20 @@ const Renderable =
 	invalidate(renderable)
 	{
 		Renderable.assertRenderable(renderable);
+		if(renderable._renderable.constructing)
+			return;
+
 		renderable._renderable.dirty = true;
-		Renderable.render(renderable);
+		if(Renderable.isLocked(renderable))
+			return;
+
+		// No need to notify anything if we have no anchors to write to. We can still manually render top-down using renderable.render().
+		if(renderable._renderable.has_anchor)
+		{
+			// Temporarily reset so that one-shot child renderables do no longer count as anchored on their second use.
+			renderable._renderable.has_anchor = renderable._renderable.anchor.length != 0 || renderable._renderable.parents.some(p => p._renderable.has_anchor);
+			Renderable.render(renderable);
+		}
 	},
 
 	_internal:
@@ -367,7 +428,7 @@ const Renderable =
 					if(ca.tagName !== cu.tagName)
 					{
 						// Workaround for changing an element's tag name.
-						let dummy = document.createElement(cu.tagName);
+						let dummy = document.createElementNS(cu.namespaceURI, cu.localName);
 						dummy.replaceChildren(...ca.childNodes);
 						ca.replaceWith(dummy);
 						ca = dummy;
@@ -379,7 +440,7 @@ const Renderable =
 						var attrca = ca.attributes.getNamedItem(attr.name);
 						if(!attrca)
 						{
-							attrca = document.createAttribute(attr.name);
+							attrca = document.createAttributeNS(attr.namespaceURI, attr.localName);
 							attrca.value = attr.value;
 							ca.attributes.setNamedItem(attrca);
 						} else if(attrca.value !== attr.value)
@@ -428,17 +489,21 @@ const Renderable =
 
 			if(this._renderable.rendering)
 				throw new Error("Fractal rendering occurred!");
-			// Ensure that the renderable using this renderable is registered as parent.
+			// Ensure that the renderable using this renderable is registered as parent, so that it is notified when this child is invalidated.
 			let renderstack = Renderable._internal.renderstack;
 			if(Renderable._internal.renderstack.length)
 			{
 				let last = renderstack[renderstack.length-1];
-				if(!this._renderable.parents.find(e => last === e))
+				if(!this._renderable.parents.includes(last))
 					this._renderable.parents.push(last);
-				// Prevent renderables from being garbage-collected before the next re-render of the parent.
+				if(last._renderable.has_anchor)
+					this._renderable.has_anchor = true;
+
+				// Prevent interactive renderables from being garbage-collected before the next re-render of the parent.
 				let lastChildren = last._renderable.children;
 				if(!lastChildren.includes(this))
 					lastChildren.push(this);
+				last._renderable.has_anchor ||= this._renderable.has_anchor;
 			}
 			if(this._renderable.dirty)
 			{
@@ -449,9 +514,8 @@ const Renderable =
 				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
 				this._renderable.children = [];
 
-				Renderable._internal.renderstack.push(this);
 				// Ignore render placeholders within the output.
-				let new_html = this._renderable.render.apply(this);
+				let new_html = Renderable.with(this, ()=> this._renderable.render.apply(this));
 				let changed = (this._renderable.cache !== new_html);
 				if(obj)
 					obj.changed = changed;
@@ -476,7 +540,6 @@ const Renderable =
 
 				this._renderable.dirty = false;
 				this._renderable.rendering = false;
-				Renderable._internal.renderstack.pop();
 			}
 			return this._renderable.cache_final;
 		},
@@ -607,8 +670,9 @@ const Renderable =
 			if(name in listeners)
 				continue;
 
-			listeners[name] = (e) => {
+			listeners[name] = { handler: (e) => {
 				let renderable;
+				let called = false;
 				for(let target = e.target; target; target = target?.parentElement) {
 					for(let id of (target.dataset?.renderableId?.split(",")??[])) {
 						let r = Renderable._internal.uniqueRenderables[id]?.deref();
@@ -616,21 +680,44 @@ const Renderable =
 						let handler = r?._renderable.events[e.type];
 						if(handler && !handler.call(r, {
 							type: e.type,
+							data: { key:e.key },
 							target: e.target,
 							scope: renderable,
 							bubbled: r != renderable,
-						})) return;
+						})) {
+							e.preventDefault();
+							return;
+						}
+						called ||= handler;
 					}
 				}
-			};
-			document.addEventListener(name, listeners[name]);
+
+				// activate fallback:
+				if(listeners[name]?.fallback)
+				{
+					let r = listeners[name]?.fallback;
+					renderable = renderable ?? r;
+					let handler = r?._renderable.events[e.type];
+					if(handler && !handler.call(r, {
+						type: e.type,
+						data: { key:e.key },
+						target: e.target,
+						scope: renderable,
+						bubbled: true,
+					})) {
+						e.preventDefault();
+						return;
+					}
+				}
+			}};
+			document.addEventListener(name, listeners[name].handler);
 		}
 	},
 
 	unlistenEvents(events) {
 		let listeners = Renderable._internal.eventListeners;
 		for(let event of events) {
-			document.removeEventListener(event, listeners[event])
+			document.removeEventListener(event, listeners[event]?.handler);
 			delete listeners[event];
 		}
 	},
