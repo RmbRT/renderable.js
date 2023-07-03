@@ -697,9 +697,9 @@ const Renderable =
 				}
 
 				// activate fallback:
-				if(listeners[name]?.fallback)
+				for(let r = listeners[name]?.fallback; r;
+					r = r._renderable.parents.at(-1))
 				{
-					let r = listeners[name]?.fallback;
 					renderable = renderable ?? r;
 					let handler = r?._renderable.events[e.type];
 					if(handler && !handler.call(r, {
