@@ -441,6 +441,7 @@ const Renderable =
 						if(!attrca)
 						{
 							attrca = document.createAttributeNS(attr.namespaceURI, attr.localName);
+
 							attrca.value = attr.value;
 							ca.attributes.setNamedItem(attrca);
 						} else if(attrca.value !== attr.value)
@@ -452,6 +453,9 @@ const Renderable =
 					for(var attr of ca.attributes)
 						if(!cu.attributes.getNamedItem(attr.name))
 							ca.attributes.removeNamedItem(attr.name);
+					
+					if(ca.tagName === "INPUT" && attr.name === "checked")
+						ca.checked = cu.checked;
 
 					// Ensure that the contents match.
 					if(ca.innerHTML !== cu.innerHTML) {
