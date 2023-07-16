@@ -3,7 +3,7 @@
  * @licstart  The following is the entire license notice for the 
  *  JavaScript code in this page.
  *
- * Copyright (C) 2019, 2021, 2022  RmbRT
+ * Copyright (C) 2019, 2021 – 2023  RmbRT
  *
  *
  * The JavaScript code in this page is free software: you can
@@ -31,6 +31,7 @@ console.info("This site is using renderable.js, which is free software; you can 
 
 (() => {
 var isBrowser = typeof global === "undefined";
+var hasDom = () => typeof document !== "undefined";
 var globalScope = (isBrowser ? window : global);
 var declareGlobals = (isBrowser || globalScope.RenderableUseGlobal);
 
@@ -526,7 +527,7 @@ const Renderable =
 				this._renderable.cache = new_html;
 
 				// If interactive, inject renderable's ID into the new HTML.
-				if(this._renderable.id !== undefined) {
+				if(hasDom() && this._renderable.id !== undefined) {
 					if(changed) {
 						var root = document.createElement("span");
 						root.innerHTML = this._renderable.cache;
@@ -668,7 +669,10 @@ const Renderable =
 		uniqueRenderables: {}
 	},
 
-	listenForEvents(events) {
+	listenForEvents(events)
+	{
+		if(!hasDom()) return;
+
 		let listeners = Renderable._internal.eventListeners;
 		for(let name of events) {
 			if(name in listeners)
@@ -748,7 +752,7 @@ setInterval(() => {
 	}
 }, 60000);
 
-if("document" in globalScope)
+if(hasDom())
 	document.addEventListener("DOMContentLoaded", function() {
 		Renderable._internal.replace_placeholders(document.body);
 		Renderable._internal.replace_placeholders(document.head);
