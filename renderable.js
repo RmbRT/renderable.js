@@ -133,7 +133,7 @@ const Renderable =
 		if(!(params.render instanceof Function))
 			throw new Error("Expected 'render' function in params.");
 
-		if("render" in obj)
+		if(obj.hasOwnProperty("render"))
 			throw new Error("Object must not yet have a 'render' function.");
 		obj.toString = obj.render = Renderable._internal.render;
 
@@ -251,10 +251,13 @@ const Renderable =
 		Fields in this object will not be tracked and modifications will not result in a re-render. */
 	create(fields, params, untracked)
 	{
+		const base = untracked ?? {};
+		delete base.render;
+
 		var r = Renderable.addFields(
 			Renderable.enable(
-				Object.assign({}, untracked),
-				params,
+				base,
+				{ render: untracked?.render, ...params },
 				undefined),
 			fields);
 		Renderable._internal.renderstack.push(r);
@@ -270,12 +273,26 @@ const Renderable =
 	createInteractive: (function() {
 		let counter = 0n;
 		return function createInteractive(fields, params, untracked) {
+			const base = untracked ?? {};
+			const proto = Object.getPrototypeOf(base);
+			delete base.render;
+
+			if(!params.events) params.events = {};
+			Object.getOwnPropertyNames(proto).concat(Object.keys(base)).flatMap(
+				x => {
+					let event = x.match(/^onDom([A-Z]\w+)/)
+					if(!event) return [];
+					if(event[1].match(/^[A-Z][a-z]/))
+						return [[x, event[1][0].toLowerCase() + event[1].slice(1)]];
+					return [[x, event[1]]];
+				}).forEach(([k, event]) => params.events[event] = base[k]);
 			var r = Renderable.addFields(
 				Renderable.enable(
-					Object.assign({}, untracked),
-					params,
+					base,
+					{ render: untracked?.render, ...params },
 					counter++),
 				fields);
+
 			Renderable._internal.renderstack.push(r);
 			if(typeof params["constructor"] === "function")
 				params["constructor"].call(r);
