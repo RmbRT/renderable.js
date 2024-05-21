@@ -101,7 +101,7 @@ Also note that if a substitution results in a placeholder being generated, it is
 
 **Events and interactions**&emsp;
 You can create _interactive renderables_ which are treated differently from usual renderables and can receive events sent to their corresponding HTML elements.
-This is done with `Renderable.createInteractive`, and supplying an `events` property in the second argument.
+This is done with `Renderable.createInteractive`, and supplying an `events` property in the second argument. **Warning**: please make sure to read the troubleshooting section below before using interactibles!
 
 ```js
 function button(text, {onClick, anchor}) {
@@ -143,6 +143,21 @@ Renderable.create({
 <h1>Shopping list</h1>
 ${render.myList}
 ```
+
+### Troubleshooting
+
+For interactive renderables, the returned HTML is processed (top-level nodes are annotated with an ID). This step may break the HTML if its top-level nodes are not allowed as children to generic HTML nodes (such as `td` and `tr`). In that case, specify the required container element in the `render()` method as follows, by using an `out` parameter passed to it:
+
+```js
+{
+	render(settings) {
+		settings.container = "tbody";
+		return `<tr><td>...</td></tr>`;
+	}
+}
+```
+
+Failing to do so will result in botched HTML, as it the HTML of interactibles is parsed into the children of a HTML tag via `Element.innerHTML`, which are then annotated with IDs, and converted back into HTML (again, via `innerHTML`). Sadly, there is no lightweight way to parse HTML natively, so `tr` and `td` tags are eliminated in the process. The `settings.container` option sets the desired tag name of the temporary container element, working around the issue.
 
 ## Server-side use
 

@@ -519,8 +519,9 @@ const Renderable =
 				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
 				this._renderable.children = [];
 
+				const settings = {};
 				// Ignore render placeholders within the output.
-				let new_html = Renderable.with(this, ()=> this._renderable.render.apply(this));
+				let new_html = Renderable.with(this, ()=> this._renderable.render.call(this, settings));
 				let changed = (this._renderable.cache !== new_html);
 				if(obj)
 					obj.changed = changed;
@@ -529,7 +530,7 @@ const Renderable =
 				// If interactive, inject renderable's ID into the new HTML.
 				if(hasDom() && this._renderable.id !== undefined) {
 					if(changed) {
-						var root = document.createElement("span");
+						var root = document.createElement(settings.container ?? "span");
 						root.innerHTML = this._renderable.cache;
 						for(let tag of root.children) {
 							let ids = tag.dataset?.renderableId?.split(",") ?? [];
