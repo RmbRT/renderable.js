@@ -710,6 +710,7 @@ const Renderable =
 							target: e.target,
 							scope: renderable,
 							bubbled: r != renderable,
+							root: target,
 						})) {
 							e.preventDefault();
 							return;
