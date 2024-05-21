@@ -3,7 +3,7 @@
  * @licstart  The following is the entire license notice for the 
  *  JavaScript code in this page.
  *
- * Copyright (C) 2019, 2021 – 2023  RmbRT
+ * Copyright (C) 2019, 2021 – 2024  RmbRT
  *
  *
  * The JavaScript code in this page is free software: you can
