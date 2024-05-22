@@ -420,7 +420,10 @@ const Renderable =
 			// Temporarily reset so that one-shot child renderables do no longer count as anchored on their second use.
 			renderable._renderable.has_anchor = renderable._renderable.anchor.length != 0 || renderable._renderable.parents.some(p => p._renderable.has_anchor);
 			Renderable.render(renderable);
-		}
+		} else
+			// Even if currently unanchored, at least mark parents as dirty, in case the anchor is restored later. Parents are detached from children before rendering, so all still linked parents have not discarded this renderable since it was last rendered. Invalidating parents will not cause a re-render if the entire tree is unanchored.
+			// TODO: figure out whether this leaks interactive parents, and figure out why this is even necessary.
+			renderable._renderable.parents.forEach(Renderable.invalidate);
 	},
 
 	_internal:
