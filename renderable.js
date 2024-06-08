@@ -30,13 +30,13 @@ console.info("This site is using renderable.js, which is free software; you can 
 
 
 (() => {
-var isBrowser = typeof global === "undefined";
-var hasDom = () => typeof document !== "undefined";
-var globalScope = (isBrowser ? window : global);
-var declareGlobals = (isBrowser || globalScope.RenderableUseGlobal);
+const isBrowser = typeof global === "undefined";
+const hasDom = () => typeof document !== "undefined";
+const globalScope = (isBrowser ? window : global);
+const declareGlobals = (isBrowser || globalScope.RenderableUseGlobal);
 
 // Ensure the global render namespace exists.
-var render = {};
+const render = {};
 const Renderable =
 {
 	/** Detect whether an object is a renderable object.
@@ -254,7 +254,7 @@ const Renderable =
 		const base = untracked ?? {};
 		delete base.render;
 
-		var r = Renderable.addFields(
+		let r = Renderable.addFields(
 			Renderable.enable(
 				base,
 				{ render: untracked?.render, ...params },
@@ -286,7 +286,7 @@ const Renderable =
 						return [[x, event[1][0].toLowerCase() + event[1].slice(1)]];
 					return [[x, event[1]]];
 				}).forEach(([k, event]) => params.events[event] = base[k]);
-			var r = Renderable.addFields(
+			let r = Renderable.addFields(
 				Renderable.enable(
 					base,
 					{ render: untracked?.render, ...params },
@@ -321,7 +321,7 @@ const Renderable =
 		if(!renderable._renderable.constructing)
 			renderable._renderable.parents = [];
 
-		var out = {};
+		let out = {};
 		const start = new Date();
 		let html = renderable.render(out);
 		if(!out.changed) {
@@ -329,7 +329,7 @@ const Renderable =
 			return false;
 		}
 
-		var anchor = renderable._renderable.anchor;
+		let anchor = renderable._renderable.anchor;
 		if(typeof anchor === 'string')
 			anchor = document.getElementsByName("render."+anchor);
 
@@ -456,9 +456,9 @@ const Renderable =
 					}
 
 					// Add all attributes that are not in the anchor.
-					for(var attr of cu.attributes)
+					for(let attr of cu.attributes)
 					{
-						var attrca = ca.attributes.getNamedItem(attr.name);
+						let attrca = ca.attributes.getNamedItem(attr.name);
 						if(!attrca)
 						{
 							attrca = document.createAttributeNS(attr.namespaceURI, attr.localName);
@@ -501,7 +501,7 @@ const Renderable =
 
 			while(ca)
 			{
-				var na = ca.nextSibling;
+				const na = ca.nextSibling;
 				anchor.removeChild(ca);
 				ca = na;
 			}
@@ -581,11 +581,11 @@ const Renderable =
 			case Node.TEXT_NODE:
 				{
 					const regex = /\$\{render\.(.+?)\}/g;
-					var match;
+					let match;
 					if((match = regex.exec(node.nodeValue)) !== null)
 					{
 						let name = match[1];
-						var anchor = document.createElement("X-RENDERABLEJS-IGNORE");
+						let anchor = document.createElement("X-RENDERABLEJS-IGNORE");
 						anchor.setAttribute("name", "render." + match[1]);
 						if(name in render)
 						{
@@ -598,7 +598,7 @@ const Renderable =
 						}
 
 						// put the rest of the text into a new text node.
-						var newTextNode = document.createTextNode(node.textContent.substring(match.index+match[0].length));
+						let newTextNode = document.createTextNode(node.textContent.substring(match.index+match[0].length));
 						// insert the left part of the text into the old text node.
 						node.textContent = node.textContent.substr(0, match.index);
 						// insert newTextNode after node into the parent node.
@@ -613,7 +613,7 @@ const Renderable =
 				} break;
 			case Node.ELEMENT_NODE:
 				{
-					for(var c of node.childNodes)
+					for(let c of node.childNodes)
 					{
 						Renderable._internal.replace_placeholders(c);
 					}
@@ -651,7 +651,7 @@ const Renderable =
 		/** Registers the DOM mutation observer that automatically detects anchor placeholders in new nodes. */
 		register_mutation_observer()
 		{
-			var observer = new MutationObserver(function(notifications, observer)
+			let observer = new MutationObserver(function(notifications, observer)
 			{
 				for(let notification of notifications)
 				{
