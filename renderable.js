@@ -538,40 +538,42 @@ const Renderable =
 		{
 			Renderable.assertRenderable(this);
 
-			if(this._renderable.rendering)
+			const rthis = this._renderable;
+
+			if(rthis.rendering)
 				throw new Error("Fractal rendering occurred!");
 			// Ensure that the renderable using this renderable is registered as parent, so that it is notified when this child is invalidated.
 			let renderstack = Renderable._internal.renderstack;
-			if(Renderable._internal.renderstack.length)
+			if(renderstack.length)
 			{
-				let last = renderstack[renderstack.length-1];
-				if(!this._renderable.parents.includes(last))
+				let last = renderstack.at(-1);
+				if(!rthis.parents.includes(last))
 					this._renderable.parents.push(last);
 				if(last._renderable.has_anchor)
-					this._renderable.has_anchor = true;
+					rthis.has_anchor = true;
 
 				// Prevent interactive renderables from being garbage-collected before the next re-render of the parent.
 				let lastChildren = last._renderable.children;
 				if(!lastChildren.includes(this))
 					lastChildren.push(this);
-				last._renderable.has_anchor ||= this._renderable.has_anchor;
+				last._renderable.has_anchor ||= rthis.has_anchor;
 			}
-			if(this._renderable.dirty)
+			if(rthis.dirty)
 			{
-				this._renderable.rendering = true;
+				rthis.rendering = true;
 				// Remove this node as parent from all previous rendering's children.
-				for(const child of this._renderable.children)
+				for(const child of rthis.children)
 					child._renderable.parents = child._renderable.parents.filter(p => p !== this);
 				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
-				this._renderable.children = [];
+				rthis.children = [];
 
 				const settings = {};
 				// Ignore render placeholders within the output.
-				let new_html = Renderable.with(this, ()=> this._renderable.render.call(this, settings));
-				let changed = (this._renderable.cache !== new_html);
+				let new_html = Renderable.with(this, ()=> rthis.render.call(this, settings));
+				let changed = (rthis.cache !== new_html);
 				if(obj)
 					obj.changed = changed;
-				this._renderable.cache = new_html;
+				rthis.cache = new_html;
 
 				// If interactive, inject renderable's ID into the new HTML.
 				if(hasDom() && this._renderable.id !== undefined) {
