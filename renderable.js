@@ -428,6 +428,25 @@ const Renderable =
 
 	_internal:
 	{
+		specialAttrs: (() => {
+			const boolAttr = (name) => (e) => {
+				const v = e.getAttribute(name);
+				switch(v) {
+				case null:
+				case "false":
+					e[name] = false; break;
+				case "":
+				case "true":
+				case name:
+					e[name] = true; break;
+				}
+			};
+			return {
+				checked: boolAttr("checked"),
+				selected: boolAttr("selected")
+			};
+		})(),
+
 		/** Replaces `anchor` with `update` by replacing only affected parts of the DOM. */
 		replace(update, anchor, clone)
 		{
@@ -455,6 +474,17 @@ const Renderable =
 						ca = dummy;
 					}
 
+					// Remove all attributes that are not in the update.
+					for(let i = 0; i < ca.attributes.length;)
+					{
+						const attr = ca.attributes.item(i);
+						if(!cu.attributes.getNamedItem(attr.name)) {
+							ca.attributes.removeNamedItem(attr.name);
+							const handler = Renderable._internal.specialAttrs[attr.name];
+							handler?.(ca);
+						} else i++;
+					}
+
 					// Add all attributes that are not in the anchor.
 					for(let attr of cu.attributes)
 					{
@@ -469,14 +499,10 @@ const Renderable =
 						{
 							attrca.value = attr.value;
 						}
+
+						const handler = Renderable._internal.specialAttrs[attr.name];
+						handler?.(ca);
 					}
-					// Remove all attributes that are not in the update.
-					for(var attr of ca.attributes)
-						if(!cu.attributes.getNamedItem(attr.name))
-							ca.attributes.removeNamedItem(attr.name);
-					
-					if(ca.tagName === "INPUT" && attr.name === "checked")
-						ca.checked = cu.checked;
 
 					// Ensure that the contents match.
 					if(ca.innerHTML !== cu.innerHTML) {
