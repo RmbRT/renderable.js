@@ -737,7 +737,7 @@ const Renderable =
 						let handler = r?._renderable.events[e.type];
 						if(handler && !handler.call(r, {
 							type: e.type,
-							data: { key:e.key },
+							data: { key:e.key, data:e.data },
 							target: e.target,
 							scope: renderable,
 							bubbled: r != renderable,
