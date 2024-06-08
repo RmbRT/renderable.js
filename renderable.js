@@ -324,6 +324,7 @@ const Renderable =
 		let out = {};
 		const start = globalScope.performance?.now() ?? new Date();
 		let html = renderable.render(out);
+		const rendered = globalScope.performance?.now() ?? new Date();
 		if(!out.changed) {
 			renderable._renderable.parents = prev_parents;
 			return false;
@@ -348,7 +349,7 @@ const Renderable =
 		const end = globalScope.performance?.now() ?? new Date();
 		const diff = end - start;
 		if(diff > 10)
-			console.warn(`Rendered within ${diff}ms`);
+			console.warn(`Rendered within ${diff}ms (render: ${rendered - start}ms, DOM: ${end - rendered}ms)`);
 	
 		if(!renderable._renderable.constructing)
 		{
