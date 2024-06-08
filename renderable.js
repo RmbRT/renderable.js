@@ -322,7 +322,7 @@ const Renderable =
 			renderable._renderable.parents = [];
 
 		let out = {};
-		const start = new Date();
+		const start = globalScope.performance?.now() ?? new Date();
 		let html = renderable.render(out);
 		if(!out.changed) {
 			renderable._renderable.parents = prev_parents;
@@ -345,7 +345,7 @@ const Renderable =
 				if(html !== a.innerHTML)
 					Renderable._internal.replace(parsed, a, copy);
 		}
-		const end = new Date();
+		const end = globalScope.performance?.now() ?? new Date();
 		const diff = end - start;
 		if(diff > 10)
 			console.warn(`Rendered within ${diff}ms`);
