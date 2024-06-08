@@ -322,9 +322,11 @@ const Renderable =
 			renderable._renderable.parents = [];
 
 		let out = {};
+		Renderable._internal.isRenderCall = true;
 		const start = globalScope.performance?.now() ?? new Date();
 		let html = renderable.render(out);
 		const rendered = globalScope.performance?.now() ?? new Date();
+		Renderable._internal.isRenderCall = false;
 		if(!out.changed) {
 			renderable._renderable.parents = prev_parents;
 			return false;
@@ -338,13 +340,10 @@ const Renderable =
 		// If the renderable is in the document, render it.
 		if(anchor.length)
 		{
-			var parsed = document.createElement("span");
-			parsed.innerHTML = html;
-			var copy = anchor.length > 1;
-
-			for(let a of anchor)
-				if(html !== a.innerHTML)
-					Renderable._internal.replace(parsed, a, copy);
+			const DOM = renderable._renderable.DOM;
+			// TODO: figure out why it breaks if we do not clone the renderable's internal DOM.
+			for(let i = 0; i < anchor.length; i++)
+				Renderable._internal.replace(DOM, anchor[i], true);
 		}
 		const end = globalScope.performance?.now() ?? new Date();
 		const diff = end - start;
@@ -451,15 +450,16 @@ const Renderable =
 		/** Replaces `anchor` with `update` by replacing only affected parts of the DOM. */
 		replace(update, anchor, clone)
 		{
-			var cu = update.firstChild;
-			var ca = anchor.firstChild;
+			let cui = 0;
+			let cu = update[cui];
+			let ca = anchor.firstChild;
 
 			while(cu && ca)
 			{
-				var nu = cu.nextSibling;
-				var na = ca.nextSibling;
-
-				if(ca.nodeType !== cu.nodeType
+				const na = ca.nextSibling;
+				if(cu.isEqualNode(ca)) {
+					;
+				} else if(ca.nodeType !== cu.nodeType
 				|| ca.nodeValue !== cu.nodeValue)
 				{
 					anchor.replaceChild(clone ? cu.cloneNode(true) : cu, ca);
@@ -506,9 +506,7 @@ const Renderable =
 					}
 
 					// Ensure that the contents match.
-					if(ca.innerHTML !== cu.innerHTML) {
-						Renderable._internal.replace(cu, ca, clone);
-					}
+					Renderable._internal.replace(cu.childNodes, ca, clone);
 				} else if(ca.nodeType === Node.TEXT_NODE)
 				{
 					if(ca.nodeValue !== cu.nodeValue)
@@ -516,14 +514,13 @@ const Renderable =
 				}
 
 				ca = na;
-				cu = nu;
+				cu = update[++cui];
 			}
 
 			while(cu)
 			{
-				var nu = cu.nextSibling;
 				anchor.appendChild(clone ? cu.cloneNode(true) : cu);
-				cu = nu;
+				cu = update[++cui];
 			}
 
 			while(ca)
@@ -549,7 +546,10 @@ const Renderable =
 			{
 				let last = renderstack.at(-1);
 				if(!rthis.parents.includes(last))
-					this._renderable.parents.push(last);
+				{
+					rthis.parents.push(last);
+					last._renderable.dirty = true;
+				}
 				if(last._renderable.has_anchor)
 					rthis.has_anchor = true;
 
@@ -562,6 +562,7 @@ const Renderable =
 			if(rthis.dirty)
 			{
 				rthis.rendering = true;
+				rthis.dirty = false;
 				// Remove this node as parent from all previous rendering's children.
 				for(const child of rthis.children)
 					child._renderable.parents = child._renderable.parents.filter(p => p !== this);
@@ -573,30 +574,75 @@ const Renderable =
 				let new_html = Renderable.with(this, ()=> rthis.render.call(this, settings));
 				let changed = (rthis.cache !== new_html);
 				if(obj)
-					obj.changed = changed;
+					obj.changed = changed || rthis.dirty;
 				rthis.cache = new_html;
+				rthis.container = settings.container;
+				rthis.placeholder = settings.placeholder;
+				rthis.rendering = false;
 
-				// If interactive, inject renderable's ID into the new HTML.
-				if(hasDom() && this._renderable.id !== undefined) {
-					if(changed) {
-						var root = document.createElement(settings.container ?? "span");
-						root.innerHTML = this._renderable.cache;
-						for(let tag of root.children) {
-							let ids = tag.dataset?.renderableId?.split(",") ?? [];
-							ids = ids.concat([this._renderable.id]).join();
-							tag.dataset.renderableId = ids;
-						}
-						this._renderable.cache_final = root.innerHTML;
-					}
-				} else {
-					if(changed)
-						this._renderable.cache_final = this._renderable.cache;
+				// Mark all parents as dirty, so they have to update their DOM cache.
+				if(changed || rthis.dirty)
+				{
+					rthis.parents.forEach(p => p._renderable.dirty = true);
+					rthis.dirty = false;
+
+					// A child invalidated us, update DOM.
+					if(hasDom())
+						Renderable._internal.generate_dom_children(rthis);
 				}
-
-				this._renderable.dirty = false;
-				this._renderable.rendering = false;
 			}
-			return this._renderable.cache_final;
+
+			if(hasDom()
+			&& renderstack.length
+			&& Renderable._internal.isRenderCall)
+			{
+				const childIdx = renderstack.at(-1)._renderable.children.indexOf(this);
+				const firstElem = rthis.DOM.find(x => x.nodeType === Node.ELEMENT_NODE);
+				const tag = firstElem?.tagName ?? "span";
+				return `<${tag} ${
+					`data-renderablejs-child="${childIdx}"`
+					}><td></td></${tag}>`;
+			}
+
+			return rthis.cache;
+		},
+
+		generate_dom_children(rthis) {			
+			// Orphan all previous DOM nodes for garbage collection.
+			if(rthis.DOM?.fresh === false)
+				rthis.DOM.forEach(el => el.parentNode?.removeChild(el));
+
+			const root = document.createElement(rthis.container ?? "span");
+			root.innerHTML = rthis.cache;
+
+			const anchors = rthis.children.length ?
+				root.querySelectorAll("*[data-renderablejs-child]") :
+				[];
+
+			for(let a of anchors)
+			{
+				let child = parseInt(a.getAttribute("data-renderablejs-child"));
+				const rchild = rthis.children[child]._renderable;
+
+				// If a renderable only has one parent, its DOM is simply integrated. Otherwise, it has to be cloned into subsequent parents.
+				const nodes = rchild.DOM.map(n =>
+					(rchild.DOM.fresh) ? n : n.cloneNode(true));
+				rchild.DOM.fresh = false;
+				a.replaceWith(...nodes);
+			}
+
+			// Interactives need to be annotated with the renderable ID.
+			if(rthis.id !== undefined) {
+				for(let tag of root.children) {
+					let ids = tag.dataset?.renderableId?.split(",") ?? [];
+					ids.push(rthis.id);
+					tag.dataset.renderableId = ids.join();
+				}
+			}
+
+			// Remove all children from temp root and store them.
+			rthis.DOM = Array.from(root.childNodes);
+			rthis.DOM.fresh = true;
 		},
 
 		/** Replaces anchor placeholders (${render.anchor} strings) with anchor tags in a node. */
