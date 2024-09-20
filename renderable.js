@@ -791,6 +791,7 @@ const Renderable =
 							scope: renderable,
 							bubbled: r != renderable,
 							root: target,
+							raw: e
 						})) {
 							e.preventDefault();
 							return;
@@ -811,6 +812,7 @@ const Renderable =
 						target: e.target,
 						scope: renderable,
 						bubbled: true,
+						raw: e
 					})) {
 						e.preventDefault();
 						return;
