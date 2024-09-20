@@ -426,6 +426,30 @@ const Renderable =
 			renderable._renderable.parents.forEach(Renderable.invalidate);
 	},
 
+	use(renderable)
+	{
+		const rthis = renderable._renderable;
+		const renderstack = Renderable._internal.renderstack;
+		if(renderstack.length)
+		{
+			let last = renderstack.at(-1);
+			if(!rthis.parents.includes(last))
+			{
+				rthis.parents.push(last);
+				last._renderable.dirty = true;
+			}
+			if(last._renderable.has_anchor)
+				rthis.has_anchor = true;
+
+			// Prevent interactive renderables from being garbage-collected before the next re-render of the parent.
+			let lastChildren = last._renderable.children;
+			if(!lastChildren.includes(renderable))
+				lastChildren.push(renderable);
+			last._renderable.has_anchor ||= rthis.has_anchor;
+		}
+		return renderable;
+	},
+
 	_internal:
 	{
 		specialAttrs: (() => {
@@ -542,23 +566,7 @@ const Renderable =
 				throw new Error("Fractal rendering occurred!");
 			// Ensure that the renderable using this renderable is registered as parent, so that it is notified when this child is invalidated.
 			let renderstack = Renderable._internal.renderstack;
-			if(renderstack.length)
-			{
-				let last = renderstack.at(-1);
-				if(!rthis.parents.includes(last))
-				{
-					rthis.parents.push(last);
-					last._renderable.dirty = true;
-				}
-				if(last._renderable.has_anchor)
-					rthis.has_anchor = true;
-
-				// Prevent interactive renderables from being garbage-collected before the next re-render of the parent.
-				let lastChildren = last._renderable.children;
-				if(!lastChildren.includes(this))
-					lastChildren.push(this);
-				last._renderable.has_anchor ||= rthis.has_anchor;
-			}
+			Renderable.use(this);
 			if(rthis.dirty)
 			{
 				rthis.rendering = true;
