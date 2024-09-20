@@ -274,11 +274,21 @@ const Renderable =
 		let counter = 0n;
 		return function createInteractive(fields, params, untracked) {
 			const base = untracked ?? {};
-			const proto = Object.getPrototypeOf(base);
+
+			function getProtoMembers(o) {
+				let proto = Object.getPrototypeOf(o);
+				const members = [];
+				while(!proto.hasOwnProperty("__proto__")) {
+					members.push(...Object.getOwnPropertyNames(proto));
+					proto = Object.getPrototypeOf(proto);
+				}
+				return members;
+			}
+
 			delete base.render;
 
 			if(!params.events) params.events = {};
-			Object.getOwnPropertyNames(proto).concat(Object.keys(base)).flatMap(
+			getProtoMembers(base).concat(Object.keys(base)).flatMap(
 				x => {
 					let event = x.match(/^onDom([A-Z]\w+)/)
 					if(!event) return [];
