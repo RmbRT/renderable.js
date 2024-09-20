@@ -578,6 +578,7 @@ const Renderable =
 				rthis.cache = new_html;
 				rthis.container = settings.container;
 				rthis.placeholder = settings.placeholder;
+				rthis.inline = settings.inline;
 				rthis.rendering = false;
 
 				// Mark all parents as dirty, so they have to update their DOM cache.
@@ -594,7 +595,8 @@ const Renderable =
 
 			if(hasDom()
 			&& renderstack.length
-			&& Renderable._internal.isRenderCall)
+			&& Renderable._internal.isRenderCall
+			&& !rthis.inline)
 			{
 				const childIdx = renderstack.at(-1)._renderable.children.indexOf(this);
 				const firstElem = rthis.DOM.find(x => x.nodeType === Node.ELEMENT_NODE);

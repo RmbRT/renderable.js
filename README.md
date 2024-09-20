@@ -159,6 +159,8 @@ For interactive renderables, the returned HTML is processed (top-level nodes are
 
 Failing to do so will result in botched HTML, as it the HTML of interactibles is parsed into the children of a HTML tag via `Element.innerHTML`, which are then annotated with IDs, and converted back into HTML (again, via `innerHTML`). Sadly, there is no lightweight way to parse HTML natively, so `tr` and `td` tags are eliminated in the process. The `settings.container` option sets the desired tag name of the temporary container element, working around the issue.
 
+**`settings.inline`**&emsp;To allow the use of a renderable in attributes or other places where a placeholder tag is not legal, set `settings.inline`. This pastes the renderable's HTML as a normal string. This probably also a good thing to do for small text-only nodes in general. If this field is not set, then it will generate a placeholder tag in its parent renderables. Especially for complex DOM elements, it is preferable not to inline them, as the cached DOM can be assembled more efficiently and less parsing and pasting occurs.
+
 ## Server-side use
 
 If you're in a non-DOM context, like Node.js, you can simply `require()` renderable.js and it will return `{ Renderable, render }`.
