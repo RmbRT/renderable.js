@@ -475,9 +475,13 @@ const Renderable =
 					e[name] = true; break;
 				}
 			};
+			const genericAttr = (name) => (e) => {
+				e[name] = e.getAttribute(name);
+			};
 			return {
 				checked: boolAttr("checked"),
-				selected: boolAttr("selected")
+				selected: boolAttr("selected"),
+				value: genericAttr("value")
 			};
 		})(),
 
