@@ -632,7 +632,7 @@ const Renderable =
 			return rthis.cache;
 		},
 
-		generate_dom_children(rthis) {			
+		generate_dom_children(rthis) {
 			// Orphan all previous DOM nodes for garbage collection.
 			if(rthis.DOM?.fresh === false)
 				rthis.DOM.forEach(el => el.parentNode?.removeChild(el));
