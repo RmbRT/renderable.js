@@ -623,9 +623,10 @@ const Renderable =
 				const childIdx = renderstack.at(-1)._renderable.children.indexOf(this);
 				const firstElem = rthis.DOM.find(x => x.nodeType === Node.ELEMENT_NODE);
 				const tag = firstElem?.tagName ?? "span";
+				const requiredChild = {"tr": "td"}[tag];
 				return `<${tag} ${
 					`data-renderablejs-child="${childIdx}"`
-					}><td></td></${tag}>`;
+					}>${requiredChild ? `<${requiredChild}></${requiredChild}>`:""}</${tag}>`;
 			}
 
 			return rthis.cache;
