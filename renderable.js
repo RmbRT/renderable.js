@@ -580,6 +580,7 @@ const Renderable =
 				throw new Error("Fractal rendering occurred!");
 			// Ensure that the renderable using this renderable is registered as parent, so that it is notified when this child is invalidated.
 			let renderstack = Renderable._internal.renderstack;
+			let rparent = renderstack.at(-1)?._renderable;
 			Renderable.use(this);
 			if(rthis.dirty)
 			{
@@ -591,16 +592,19 @@ const Renderable =
 				// Clear the children list for repopulation, release last rendering's temporary children for garbage collection.
 				rthis.children = [];
 
-				const settings = {};
+				rthis.inline = rparent?.inline; // set this up to pass it along to children.
+
+				const setter = (settings) => {
+					rthis.container = settings.container;
+					rthis.placeholder = settings.placeholder;
+					rthis.inline ||= settings.inline;
+				};
 				// Ignore render placeholders within the output.
-				let new_html = Renderable.with(this, ()=> rthis.render.call(this, settings));
+				let new_html = Renderable.with(this, ()=> rthis.render.call(this, setter));
 				let changed = (rthis.cache !== new_html);
 				if(obj)
 					obj.changed = changed || rthis.dirty;
 				rthis.cache = new_html;
-				rthis.container = settings.container;
-				rthis.placeholder = settings.placeholder;
-				rthis.inline = settings.inline;
 				rthis.rendering = false;
 
 				// Mark all parents as dirty, so they have to update their DOM cache.
@@ -610,15 +614,21 @@ const Renderable =
 					rthis.dirty = false;
 
 					// A child invalidated us, update DOM.
-					if(hasDom())
+					if(hasDom() && !rthis.inline)
 						Renderable._internal.generate_dom_children(rthis);
 				}
 			}
 
-			if(hasDom()
-			&& renderstack.length
-			&& Renderable._internal.isRenderCall
-			&& !rthis.inline)
+			if(!(hasDom()
+			&& rparent
+			&& Renderable._internal.isRenderCall))
+				return rthis.cache;
+
+			if(rthis.inline)
+				return rthis.cache;
+			else if(rparent.inline)
+				return rthis.DOM.map(x => x.outerHTML).join("");
+			else
 			{
 				const childIdx = renderstack.at(-1)._renderable.children.indexOf(this);
 				const firstElem = rthis.DOM.find(x => x.nodeType === Node.ELEMENT_NODE);
@@ -628,8 +638,6 @@ const Renderable =
 					`data-renderablejs-child="${childIdx}"`
 					}>${requiredChild ? `<${requiredChild}></${requiredChild}>`:""}</${tag}>`;
 			}
-
-			return rthis.cache;
 		},
 
 		generate_dom_children(rthis) {
